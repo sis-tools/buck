@@ -101,7 +101,7 @@ public class ThriftLibraryIntegrationTest {
         typeCoercerFactory,
         new ConstructorArgMarshaller(typeCoercerFactory));
 
-    Cell cell = Cell.createCell(
+    Cell cell = Cell.createRootCell(
         filesystem,
         new TestConsole(),
         Watchman.NULL_WATCHMAN,
@@ -110,7 +110,6 @@ public class ThriftLibraryIntegrationTest {
         new KnownBuildRuleTypesFactory(
             new ProcessExecutor(new TestConsole()),
             new FakeAndroidDirectoryResolver()),
-        new FakeAndroidDirectoryResolver(),
         new DefaultClock(),
         new WatchmanDiagnosticCache());
     BuildTarget target = BuildTargetFactory.newInstance(filesystem, "//thrift:exe");

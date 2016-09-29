@@ -113,27 +113,13 @@ public class Parser {
   }
 
   @VisibleForTesting
-  ImmutableSet<Map<String, Object>> getRawTargetNodes(
-      BuckEventBus eventBus,
+  static ImmutableSet<Map<String, Object>> getRawTargetNodes(
+      PerBuildState state,
       Cell cell,
-      boolean enableProfiling,
-      ListeningExecutorService executor,
       Path buildFile) throws InterruptedException, BuildFileParseException {
     Preconditions.checkState(buildFile.isAbsolute());
     Preconditions.checkState(buildFile.startsWith(cell.getRoot()));
-
-    try (
-        PerBuildState state =
-            new PerBuildState(
-                this,
-                eventBus,
-                executor,
-                cell,
-                enableProfiling,
-                SpeculativeParsing.of(false),
-                /* ignoreBuckAutodepsFiles */ false)) {
-      return state.getAllRawNodes(cell, buildFile);
-    }
+    return state.getAllRawNodes(cell, buildFile);
   }
 
   public ImmutableSet<TargetNode<?>> getAllTargetNodes(
@@ -187,19 +173,15 @@ public class Parser {
 
   @Nullable
   public SortedMap<String, Object> getRawTargetNode(
-      BuckEventBus eventBus,
+      PerBuildState state,
       Cell cell,
-      boolean enableProfiling,
-      ListeningExecutorService executor,
       TargetNode<?> targetNode) throws InterruptedException, BuildFileParseException {
-
     try {
+
       Cell owningCell = cell.getCell(targetNode.getBuildTarget());
       ImmutableSet<Map<String, Object>> allRawNodes = getRawTargetNodes(
-          eventBus,
+          state,
           owningCell,
-          enableProfiling,
-          executor,
           cell.getAbsolutePathToBuildFile(targetNode.getBuildTarget()));
 
       String shortName = targetNode.getBuildTarget().getShortName();
@@ -219,6 +201,28 @@ public class Parser {
       throw new RuntimeException("Deeply unlikely to be true: the cell is missing: " + targetNode);
     }
     return null;
+  }
+
+  @Nullable
+  public SortedMap<String, Object> getRawTargetNode(
+      BuckEventBus eventBus,
+      Cell cell,
+      boolean enableProfiling,
+      ListeningExecutorService executor,
+      TargetNode<?> targetNode) throws InterruptedException, BuildFileParseException {
+
+    try (
+        PerBuildState state =
+            new PerBuildState(
+                this,
+                eventBus,
+                executor,
+                cell,
+                enableProfiling,
+                SpeculativeParsing.of(false),
+                /* ignoreBuckAutodepsFiles */ false)) {
+      return getRawTargetNode(state, cell, targetNode);
+    }
   }
 
   private RuntimeException propagateRuntimeCause(RuntimeException e)

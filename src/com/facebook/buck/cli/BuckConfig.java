@@ -197,7 +197,7 @@ public class BuckConfig {
     return config.getListWithoutComments(section, field, splitChar);
   }
 
-  public CellPathResolver getCellRoots() {
+  public CellPathResolver getCellPathResolver() {
     return cellPathResolver;
   }
 
@@ -261,7 +261,7 @@ public class BuckConfig {
     return BuildTargetParser.INSTANCE.parse(
         target,
         BuildTargetPatternParser.fullyQualified(),
-        getCellRoots());
+        getCellPathResolver());
   }
 
   public ImmutableList<BuildTarget> getBuildTargetList(String section, String key) {
@@ -424,7 +424,7 @@ public class BuckConfig {
         buildTarget = BuildTargetParser.INSTANCE.parse(
             value,
             BuildTargetPatternParser.fullyQualified(),
-            getCellRoots());
+            getCellPathResolver());
       }
       aliasToBuildTarget.put(alias, buildTarget);
     }
@@ -472,6 +472,10 @@ public class BuckConfig {
 
   public boolean isChromeTraceCreationEnabled() {
     return getBooleanValue(LOG_SECTION, "chrome_trace_generation", true);
+  }
+
+  public boolean isPublicAnnouncementsEnabled() {
+    return getBooleanValue(LOG_SECTION, "public_announcements", true);
   }
 
   public boolean isRuleKeyLoggerEnabled() {

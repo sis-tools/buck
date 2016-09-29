@@ -31,11 +31,9 @@ import com.facebook.buck.testutil.FakeProjectFilesystem;
 import com.facebook.buck.testutil.TestConsole;
 import com.facebook.buck.timing.FakeClock;
 import com.facebook.buck.util.ProcessExecutor;
-import com.google.common.base.Optional;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
-import java.nio.file.Path;
 
 import javax.annotation.Nullable;
 
@@ -101,14 +99,13 @@ public class TestCellBuilder {
         androidDirectoryResolver);
 
     if (parserFactory == null) {
-      return Cell.createCell(
+      return Cell.createRootCell(
           filesystem,
           new TestConsole(),
           watchman,
           config,
           cellConfig,
           typesFactory,
-          androidDirectoryResolver,
           new FakeClock(0),
           new WatchmanDiagnosticCache());
     }
@@ -135,16 +132,7 @@ public class TestCellBuilder {
 
   public static CellPathResolver createCellRoots(
       @Nullable ProjectFilesystem filesystem) {
-    final ProjectFilesystem toUse = filesystem == null ? new FakeProjectFilesystem() : filesystem;
-
-    return new CellPathResolver() {
-      @Override
-      public Path getCellPath(Optional<String> cellName) {
-        if (cellName.isPresent() && !cellName.get().equals("@")) {
-          throw new RuntimeException("No known cell with the name: " + cellName);
-        }
-        return toUse.getRootPath();
-      }
-    };
+    ProjectFilesystem toUse = filesystem == null ? new FakeProjectFilesystem() : filesystem;
+    return new FakeCellPathResolver(toUse);
   }
 }

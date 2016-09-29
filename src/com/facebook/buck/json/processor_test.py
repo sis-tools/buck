@@ -4,8 +4,11 @@ import os
 import unittest
 import shutil
 import tempfile
+import StringIO
 
-from .buck import BuildFileProcessor, Diagnostic, add_rule
+from pywatchman import bser
+
+from .buck import BuildFileProcessor, Diagnostic, add_rule, process_with_diagnostics
 
 
 def foo_rule(name, srcs=[], visibility=[], build_env=None):
@@ -93,9 +96,10 @@ class BuckTest(unittest.TestCase):
         for pfile in pfiles:
             self.write_file(pfile)
 
-    def create_build_file_processor(self, *includes, **kwargs):
+    def create_build_file_processor(self, cell_roots=None, includes=None, **kwargs):
         return BuildFileProcessor(
             self.project_root,
+            cell_roots or {},
             self.build_file_name,
             self.allow_empty_globs,
             False,              # ignore_buck_autodeps_files
@@ -105,7 +109,7 @@ class BuckTest(unittest.TestCase):
             False,              # watchman_use_glob_generator
             self.enable_build_file_sandboxing,
             self.project_import_whitelist,
-            includes,
+            includes or [],
             **kwargs)
 
     def test_sibling_includes_use_separate_globals(self):
@@ -129,8 +133,7 @@ class BuckTest(unittest.TestCase):
         build_file = ProjectFile(self.project_root, path='BUCK', contents='')
         self.write_file(build_file)
         build_file_processor = self.create_build_file_processor(
-            include_def1.name,
-            include_def2.name)
+            includes=[include_def1.name, include_def2.name])
         self.assertRaises(
             NameError,
             build_file_processor.process,
@@ -181,8 +184,7 @@ class BuckTest(unittest.TestCase):
         build_file = ProjectFile(self.project_root, path='BUCK', contents=('test()',))
         self.write_file(build_file)
         build_file_processor = self.create_build_file_processor(
-            include_def1.name,
-            include_def2.name)
+            includes=[include_def1.name, include_def2.name])
         build_file_processor.process(build_file.root, build_file.prefix, build_file.path, set())
 
         # Construct a processor with no default includes, have a generated
@@ -213,7 +215,7 @@ class BuckTest(unittest.TestCase):
         build_file = ProjectFile(self.project_root, path='BUCK', contents=('_FOO',))
         self.write_file(build_file)
         build_file_processor = self.create_build_file_processor(
-            include_def.name)
+            includes=[include_def.name])
         self.assertRaises(
             NameError,
             build_file_processor.process,
@@ -254,7 +256,7 @@ class BuckTest(unittest.TestCase):
         # Run the processor to verify that the explicit include can use the
         # variable in the implicit include.
         build_file_processor = self.create_build_file_processor(
-            implicit_inc.name)
+            includes=[implicit_inc.name])
         build_file_processor.process(build_file.root, build_file.prefix, build_file.path, set())
 
     def test_all_list_is_respected(self):
@@ -273,7 +275,7 @@ class BuckTest(unittest.TestCase):
         build_file = ProjectFile(self.project_root, path='BUCK', contents=('FOO',))
         self.write_file(build_file)
         build_file_processor = self.create_build_file_processor(
-            include_def.name)
+            includes=[include_def.name])
         self.assertRaises(
             NameError,
             build_file_processor.process,
@@ -321,7 +323,8 @@ class BuckTest(unittest.TestCase):
             ))
         self.write_files(build_defs, other_defs, build_file)
 
-        build_file_processor = self.create_build_file_processor(build_defs.name)
+        build_file_processor = self.create_build_file_processor(
+            includes=[build_defs.name])
         build_file_processor.install_builtins(__builtin__.__dict__)
         self.assertRaises(
             ValueError,
@@ -717,3 +720,49 @@ class BuckTest(unittest.TestCase):
                 level='warning',
                 source='sandboxing')]),
             diagnostics)
+
+    def test_can_resolve_cell_paths(self):
+        build_file_processor = self.create_build_file_processor(
+            cell_roots={
+                'foo': os.path.abspath(os.path.join(self.project_root, '../cell'))
+            })
+        self.assertEqual(
+            os.path.abspath(os.path.join(self.project_root, '../cell/bar/baz')),
+            build_file_processor._get_include_path('foo//bar/baz'))
+        self.assertEqual(
+            os.path.abspath(os.path.join(self.project_root, 'bar/baz')),
+            build_file_processor._get_include_path('//bar/baz'))
+
+    def test_bser_encoding_failure(self):
+        build_file_processor = self.create_build_file_processor(extra_funcs=[foo_rule])
+        build_file_processor.install_builtins(__builtin__.__dict__)
+        fake_stdout = StringIO.StringIO()
+        build_file = ProjectFile(
+            self.project_root,
+            path='BUCK',
+            contents=(
+                'foo_rule(',
+                '  name="foo",'
+                '  srcs=[object()],'
+                ')'
+            ))
+        self.write_file(build_file)
+        process_with_diagnostics(
+            {
+                'buildFile': self.build_file_name,
+                'watchRoot': '',
+                'projectPrefix': self.project_root,
+            },
+            build_file_processor,
+            fake_stdout)
+        result = fake_stdout.getvalue()
+        decoded_result = bser.loads(result)
+        self.assertEqual(
+            [],
+            decoded_result['values'])
+        self.assertEqual(
+            'fatal',
+            decoded_result['diagnostics'][0]['level'])
+        self.assertEqual(
+            'parse',
+            decoded_result['diagnostics'][0]['source'])

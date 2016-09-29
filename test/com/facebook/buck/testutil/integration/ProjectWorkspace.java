@@ -611,7 +611,7 @@ public class ProjectWorkspace {
         env,
         Optional.<String>absent(),
         Optional.<String>absent());
-    return Cell.createCell(
+    return Cell.createRootCell(
         filesystem,
         console,
         Watchman.NULL_WATCHMAN,
@@ -626,7 +626,6 @@ public class ProjectWorkspace {
         new KnownBuildRuleTypesFactory(
             new ProcessExecutor(console),
             directoryResolver),
-        directoryResolver,
         new DefaultClock(),
         new WatchmanDiagnosticCache());
   }
