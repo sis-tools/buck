@@ -199,9 +199,6 @@ public class ProjectGenerator {
 
     /** Don't use header maps as header search paths */
     DISABLE_HEADER_MAPS,
-
-    /** Don't create symbolic links to headers when creating header maps */
-    DISABLE_HEADERS_SYMLINKS,
   }
 
   /**
@@ -1510,16 +1507,17 @@ public class ProjectGenerator {
     }
 
     // -- phases
+    boolean headerMapDisabled = options.contains(Option.DISABLE_HEADER_MAPS);
     createHeaderSymlinkTree(
         sourcePathResolver,
         getPublicCxxHeaders(targetNode),
         getPathToHeaderSymlinkTree(targetNode, HeaderVisibility.PUBLIC),
-        arg.xcodePublicHeadersSymlinks.or(true));
+        arg.xcodePublicHeadersSymlinks.or(true) || headerMapDisabled);
     createHeaderSymlinkTree(
         sourcePathResolver,
         getPrivateCxxHeaders(targetNode),
         getPathToHeaderSymlinkTree(targetNode, HeaderVisibility.PRIVATE),
-        arg.xcodePrivateHeadersSymlinks.or(true));
+        arg.xcodePrivateHeadersSymlinks.or(true) || headerMapDisabled);
 
     if (appleTargetNode.isPresent()) {
       // Use Core Data models from immediate dependencies only.
@@ -1908,7 +1906,8 @@ public class ProjectGenerator {
 
     Path hashCodeFilePath = headerSymlinkTreeRoot.resolve(".contents-hash");
     Optional<String> currentHashCode = projectFilesystem.readFileIfItExists(hashCodeFilePath);
-    String newHashCode = getHeaderSymlinkTreeHashCode(resolvedContents).toString();
+    String newHashCode =
+        getHeaderSymlinkTreeHashCode(resolvedContents, shouldCreateHeadersSymlinks).toString();
     if (Optional.of(newHashCode).equals(currentHashCode)) {
       LOG.debug(
           "Symlink tree at %s is up to date, not regenerating (key %s).",
@@ -1952,9 +1951,16 @@ public class ProjectGenerator {
     headerSymlinkTrees.add(headerSymlinkTreeRoot);
   }
 
-  private HashCode getHeaderSymlinkTreeHashCode(ImmutableSortedMap<Path, Path> contents) {
+  private HashCode getHeaderSymlinkTreeHashCode(
+      ImmutableSortedMap<Path, Path> contents,
+      boolean shouldCreateHeadersSymlinks) {
     Hasher hasher = Hashing.sha1().newHasher();
     hasher.putBytes(BuckVersion.getVersion().getBytes(Charsets.UTF_8));
+    String symlinkState = shouldCreateHeadersSymlinks ? "symlinks-enabled" : "symlinks-disabled";
+    byte[] symlinkStateValue = symlinkState.getBytes(Charsets.UTF_8);
+    hasher.putInt(symlinkStateValue.length);
+    hasher.putBytes(symlinkStateValue);
+    hasher.putInt(0);
     for (Map.Entry<Path, Path> entry : contents.entrySet()) {
       byte[] key = entry.getKey().toString().getBytes(Charsets.UTF_8);
       byte[] value = entry.getValue().toString().getBytes(Charsets.UTF_8);
