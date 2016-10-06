@@ -71,4 +71,28 @@ public abstract class DefaultCompiler implements Compiler {
         .setReflectively("type", getClass().getSimpleName());
   }
 
+  @Override
+  public boolean isArgFileSupported() {
+    return true;
+  }
+
+  @Override
+  public boolean isDependencyFileSupported() {
+    return true;
+  }
+
+  @Override
+  public ImmutableList<String> outputArgs(String outputPath) {
+    return ImmutableList.of("-o", outputPath);
+  }
+
+  @Override
+  public ImmutableList<String> outputDependenciesArgs(String outputPath) {
+    return ImmutableList.of("-MD", "-MF", outputPath);
+  }
+
+  @Override
+  public ImmutableList<String> languageArgs(String inputLanguage) {
+    return ImmutableList.of("-x", inputLanguage);
+  }
 }

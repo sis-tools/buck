@@ -15,33 +15,36 @@
  */
 package com.facebook.buck.jvm.java.intellij;
 
+import com.facebook.buck.cli.BuckConfig;
+import com.facebook.buck.jvm.java.JavaBuckConfig;
 import com.facebook.buck.util.immutables.BuckStyleImmutable;
+import com.google.common.base.Optional;
+import com.google.common.collect.ImmutableMap;
 
 import org.immutables.value.Value;
-
-import java.util.Map;
-
-import javax.annotation.Nullable;
 
 @Value.Immutable
 @BuckStyleImmutable
 abstract class AbstractIjProjectConfig {
+
+  public abstract JavaBuckConfig getJavaBuckConfig();
+
+  protected abstract BuckConfig getBuckConfig();
+
+  protected abstract ImmutableMap<String, String> getJavaLibrarySdkNamesBySourceLevel();
 
   @Value.Default
   public boolean isAutogenerateAndroidFacetSourcesEnabled() {
     return true;
   }
 
-  public abstract Map<String, String> getJdkAliases();
-
-  public @Nullable String getJdkAlias(@Nullable String jdkName) {
-    String alias = getJdkAliases().get(jdkName);
-
-    if (alias == null) {
-      return jdkName;
-    } else {
-      return alias;
-    }
+  public Optional<String> getJavaLibrarySdkNameForSourceLevel(String sourceLevel) {
+    return Optional.fromNullable(getJavaLibrarySdkNamesBySourceLevel().get(sourceLevel));
   }
 
+  public abstract Optional<String> getProjectJdkName();
+
+  public abstract Optional<String> getProjectJdkType();
+
+  public abstract Optional<String> getProjectLanguageLevel();
 }

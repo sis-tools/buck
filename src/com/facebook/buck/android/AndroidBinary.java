@@ -86,7 +86,9 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.AbstractMap;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -196,6 +198,8 @@ public class AndroidBinary
   @AddToRuleKey
   private final Optional<SourcePath> proguardJarOverride;
   private final String proguardMaxHeapSize;
+  @AddToRuleKey
+  private final Optional<List<String>> proguardJvmArgs;
   private final Optional<String> proguardAgentPath;
   @AddToRuleKey
   private final ResourceCompressionMode resourceCompressionMode;
@@ -231,6 +235,7 @@ public class AndroidBinary
       SourcePathResolver resolver,
       Optional<SourcePath> proguardJarOverride,
       String proguardMaxHeapSize,
+      Optional<List<String>> proguardJvmArgs,
       Optional<String> proguardAgentPath,
       Keystore keystore,
       PackageType packageType,
@@ -259,6 +264,7 @@ public class AndroidBinary
     super(params, resolver);
     this.proguardJarOverride = proguardJarOverride;
     this.proguardMaxHeapSize = proguardMaxHeapSize;
+    this.proguardJvmArgs = proguardJvmArgs;
     this.proguardAgentPath = proguardAgentPath;
     this.keystore = keystore;
     this.packageType = packageType;
@@ -346,6 +352,10 @@ public class AndroidBinary
 
   public Optional<Integer> getOptimizationPasses() {
     return optimizationPasses;
+  }
+
+  public Optional<List<String>> getProguardJvmArgs() {
+    return proguardJvmArgs;
   }
 
   public Optional<Boolean> getPackageAssetLibraries() {
@@ -438,7 +448,23 @@ public class AndroidBinary
             steps);
       }
 
-      final ImmutableList.Builder<Path> inputAssetLibrariesBuilder = ImmutableList.builder();
+      // Input asset libraries are sorted in descending filesize order.
+      final ImmutableSortedSet.Builder<Path> inputAssetLibrariesBuilder =
+        ImmutableSortedSet.orderedBy(new Comparator<Path>() {
+            @Override
+            public int compare(Path libPath1, Path libPath2) {
+              try {
+                ProjectFilesystem filesystem = getProjectFilesystem();
+                int filesizeResult = -Long.compare(
+                    filesystem.getFileSize(libPath1),
+                    filesystem.getFileSize(libPath2));
+                int pathnameResult = libPath1.compareTo(libPath2);
+                return filesizeResult != 0 ? filesizeResult : pathnameResult;
+              } catch (IOException e) {
+                return 0;
+              }
+            }
+        });
 
       if (packageAssetLibraries.or(Boolean.FALSE)) {
         // Copy in cxx libraries marked as assets. Filtering and renaming was already done
@@ -475,12 +501,10 @@ public class AndroidBinary
                         }
                       });
 
-
                   // Write a metadata
-                  ImmutableList<Path> inputAssetLibraries = inputAssetLibrariesBuilder.build();
                   ImmutableList.Builder<String> metadataLines = ImmutableList.builder();
                   Path metadataOutput = libSubdirectory.resolve("metadata.txt");
-                  for (Path libPath : inputAssetLibraries) {
+                  for (Path libPath : inputAssetLibrariesBuilder.build()) {
                     // Should return something like x86/libfoo.so
                     Path relativeLibPath = libSubdirectory.relativize(libPath);
                     long filesize = filesystem.getFileSize(libPath);
@@ -911,6 +935,7 @@ public class AndroidBinary
         proguardConfigsBuilder.build(),
         sdkProguardConfig,
         optimizationPasses,
+        proguardJvmArgs,
         inputOutputEntries,
         additionalLibraryJarsForProguardBuilder.build(),
         proguardConfigDir,

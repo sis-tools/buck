@@ -369,6 +369,8 @@ public class CxxLibraryDescription implements
     arg.linkStyle = Optional.absent();
     arg.bridgingHeader = Optional.absent();
     arg.moduleName = Optional.absent();
+    arg.xcodePublicHeadersSymlinks = Optional.absent();
+    arg.xcodePrivateHeadersSymlinks = Optional.absent();
     return arg;
   }
 
@@ -462,7 +464,8 @@ public class CxxLibraryDescription implements
             params.getProjectFilesystem(),
             params.getBuildTarget(),
             cxxPlatform.getFlavor(),
-            pic);
+            pic,
+            cxxPlatform.getStaticLibraryExtension());
     return Archive.from(
         staticTarget,
         params,

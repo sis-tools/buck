@@ -17,15 +17,37 @@ package com.facebook.buck.jvm.java.intellij;
 
 
 import com.facebook.buck.cli.BuckConfig;
+import com.facebook.buck.jvm.java.JavaBuckConfig;
+import com.google.common.base.Optional;
+import com.google.common.base.Splitter;
+
+import java.util.Collections;
+import java.util.Map;
 
 public class IjProjectBuckConfig {
 
   private static final String PROJECT_BUCK_CONFIG_SECTION = "project";
+  private static final String INTELLIJ_BUCK_CONFIG_SECTION = "intellij";
 
   private IjProjectBuckConfig() {
   }
 
   public static IjProjectConfig create(BuckConfig buckConfig) {
+    Optional<String> javaLibrarySdkNamesOption = buckConfig.getValue(
+        INTELLIJ_BUCK_CONFIG_SECTION,
+        "java_library_sdk_names");
+
+    Map<String, String> javaLibrarySdkNames;
+    if (javaLibrarySdkNamesOption.isPresent()) {
+      javaLibrarySdkNames = Splitter.on(',')
+          .omitEmptyStrings()
+          .trimResults()
+          .withKeyValueSeparator(Splitter.on("=>").trimResults())
+          .split(javaLibrarySdkNamesOption.get());
+    } else {
+      javaLibrarySdkNames = Collections.emptyMap();
+    }
+
     return IjProjectConfig.builder()
         .setAutogenerateAndroidFacetSourcesEnabled(
             !buckConfig.getBooleanValue(
@@ -33,7 +55,15 @@ public class IjProjectBuckConfig {
                 "disable_r_java_idea_generator",
                 false)
         )
-        .setJdkAliases(buckConfig.getEntriesForSection("intellij_jdk_aliases"))
+        .setJavaBuckConfig(new JavaBuckConfig(buckConfig))
+        .setBuckConfig(buckConfig)
+        .setJavaLibrarySdkNamesBySourceLevel(javaLibrarySdkNames)
+        .setProjectJdkName(
+            buckConfig.getValue(INTELLIJ_BUCK_CONFIG_SECTION, "jdk_name"))
+        .setProjectJdkType(
+            buckConfig.getValue(INTELLIJ_BUCK_CONFIG_SECTION, "jdk_type"))
+        .setProjectLanguageLevel(
+            buckConfig.getValue(INTELLIJ_BUCK_CONFIG_SECTION, "language_level"))
         .build();
   }
 }

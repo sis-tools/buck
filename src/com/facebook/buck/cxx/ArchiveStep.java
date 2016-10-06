@@ -49,20 +49,22 @@ public class ArchiveStep implements Step {
 
   private final ProjectFilesystem filesystem;
   private final ImmutableMap<String, String> environment;
-  private final ImmutableList<String> archiver;
+  private final ImmutableList<String> archiverCommand;
   private final ImmutableList<String> archiverFlags;
-  private final Archive.Contents contents;
+  private final ImmutableList<String> archiverExtraFlags;
   private final Path output;
   private final ImmutableList<Path> inputs;
+  private final Archiver archiver;
 
   public ArchiveStep(
       ProjectFilesystem filesystem,
       ImmutableMap<String, String> environment,
-      ImmutableList<String> archiver,
+      ImmutableList<String> archiverCommand,
       ImmutableList<String> archiverFlags,
-      Archive.Contents contents,
+      ImmutableList<String> archiverExtraFlags,
       Path output,
-      ImmutableList<Path> inputs) {
+      ImmutableList<Path> inputs,
+      Archiver archiver) {
     Preconditions.checkArgument(!output.isAbsolute());
     // Our current support for thin archives requires that all the inputs are relative paths from
     // the same cell as the output.
@@ -71,11 +73,12 @@ public class ArchiveStep implements Step {
     }
     this.filesystem = filesystem;
     this.environment = environment;
-    this.archiver = archiver;
+    this.archiverCommand = archiverCommand;
     this.archiverFlags = archiverFlags;
-    this.contents = contents;
+    this.archiverExtraFlags = archiverExtraFlags;
     this.output = output;
     this.inputs = inputs;
+    this.archiver = archiver;
   }
 
   private ImmutableList<String> getAllInputs() throws IOException {
@@ -106,7 +109,7 @@ public class ArchiveStep implements Step {
     return allInputs.build();
   }
 
-  private int runArchiver(
+  private ProcessExecutor.Result runArchiver(
       ExecutionContext context,
       final ImmutableList<String> command)
       throws IOException, InterruptedException {
@@ -121,16 +124,7 @@ public class ArchiveStep implements Step {
     if (result.getExitCode() != 0 && result.getStderr().isPresent()) {
       context.getBuckEventBus().post(ConsoleEvent.create(Level.SEVERE, result.getStderr().get()));
     }
-    return result.getExitCode();
-  }
-
-  private String getArchiveOptions() {
-    StringBuilder options = new StringBuilder();
-    options.append("qc");
-    if (contents == Archive.Contents.THIN) {
-      options.append("T");
-    }
-    return options.toString();
+    return result;
   }
 
   @Override
@@ -143,16 +137,16 @@ public class ArchiveStep implements Step {
     } else {
       ImmutableList<String> archiveCommandPrefix =
           ImmutableList.<String>builder()
-              .addAll(archiver)
+              .addAll(archiverCommand)
               .addAll(archiverFlags)
-              .add(getArchiveOptions())
-              .add(output.toString())
+              .addAll(archiverExtraFlags)
+              .addAll(archiver.outputArgs(output.toString()))
               .build();
       CommandSplitter commandSplitter = new CommandSplitter(archiveCommandPrefix);
       for (ImmutableList<String> command : commandSplitter.getCommandsForArguments(allInputs)) {
-        int exitCode = runArchiver(context, command);
-        if (exitCode != 0) {
-          return StepExecutionResult.of(exitCode);
+        ProcessExecutor.Result result = runArchiver(context, command);
+        if (result.getExitCode() != 0) {
+          return StepExecutionResult.of(result);
         }
       }
       return StepExecutionResult.SUCCESS;
@@ -164,8 +158,8 @@ public class ArchiveStep implements Step {
     ImmutableList.Builder<String> command = ImmutableList.<String>builder()
         .add("ar")
         .addAll(archiverFlags)
-        .add(getArchiveOptions())
-        .add(output.toString())
+        .addAll(archiverExtraFlags)
+        .addAll(archiver.outputArgs(output.toString()))
         .addAll(Iterables.transform(inputs, Functions.toStringFunction()));
     return Joiner.on(' ').join(command.build());
   }

@@ -184,8 +184,9 @@ public class ProcessExecutor {
     if (params.getRedirectErrorStream().isPresent()) {
       pb.redirectErrorStream(params.getRedirectErrorStream().get());
     }
-
-    return new LaunchedProcessImpl(BgProcessKiller.startProcess(pb));
+    Process process = BgProcessKiller.startProcess(pb);
+    ProcessRegistry.registerProcess(process, params);
+    return new LaunchedProcessImpl(process);
   }
 
   /**
@@ -232,18 +233,6 @@ public class ProcessExecutor {
         Optional.<String>absent(),
         Optional.<String>absent()
     );
-  }
-
-  /**
-   * @return whether the process has finished executing or not.
-   */
-  private static boolean finished(Process process) {
-    try {
-      process.exitValue();
-      return true;
-    } catch (IllegalThreadStateException e) {
-      return false;
-    }
   }
 
   /**
@@ -356,7 +345,7 @@ public class ProcessExecutor {
       // the regular `waitFor` method.
       if (timeOutMs.isPresent()) {
         timedOut = waitForTimeoutInternal(process, timeOutMs.get(), timeOutHandler);
-        if (!finished(process)) {
+        if (!ProcessHelper.hasProcessFinished(process)) {
           process.destroy();
         }
       } else {
@@ -455,6 +444,34 @@ public class ProcessExecutor {
       return stderr;
     }
 
-  }
+    public String getMessageForUnexpectedResult(String subject) {
+      return getMessageForResult(subject + " finished with unexpected result");
+    }
 
+    public String getMessageForResult(String message) {
+      return String.format(
+          "%s:\n" +
+              "exit code: %s\n" +
+              "stdout:\n" +
+              "%s" + "\n" +
+              "stderr:\n" +
+              "%s" + "\n",
+          message,
+          getExitCode(),
+          truncate(getStdout().or("")),
+          truncate(getStderr().or("")));
+    }
+
+    private static String truncate(String data) {
+      final int keepFirstChars = 10000;
+      final int keepLastChars = 10000;
+      final String truncateMessage = "...\n<truncated>\n...";
+      if (data.length() <= keepFirstChars + keepLastChars + truncateMessage.length()) {
+        return data;
+      }
+      return data.substring(0, keepFirstChars) +
+          truncateMessage +
+          data.substring(data.length() - keepLastChars);
+    }
+  }
 }

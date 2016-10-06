@@ -318,12 +318,10 @@ public class CxxGenruleDescription
      */
     @Override
     protected ImmutableList<BuildRule> resolve(
-        BuildTarget target,
-        CellPathResolver cellNames,
         BuildRuleResolver resolver,
-        ImmutableList<String> input)
+        ImmutableList<BuildTarget> input)
         throws MacroException {
-      return FluentIterable.from(super.resolve(target, cellNames, resolver, input))
+      return FluentIterable.from(super.resolve(resolver, input))
           .filter(Predicates.instanceOf(CxxPreprocessorDep.class))
           .toList();
     }
@@ -374,11 +372,14 @@ public class CxxGenruleDescription
         throws MacroException {
       SourcePathResolver pathResolver = new SourcePathResolver(resolver);
       PreprocessorFlags ppFlags = getPreprocessorFlags(getCxxPreprocessorInput(rules));
+      Preprocessor preprocessor =
+          CxxSourceTypes.getPreprocessor(cxxPlatform, sourceType).resolve(resolver);
       CxxToolFlags flags =
           ppFlags.toToolFlags(
               pathResolver,
               Functions.<Path>identity(),
-              CxxDescriptionEnhancer.frameworkPathToSearchPath(cxxPlatform, pathResolver));
+              CxxDescriptionEnhancer.frameworkPathToSearchPath(cxxPlatform, pathResolver),
+              preprocessor);
       return Joiner.on(' ').join(Iterables.transform(flags.getAllFlags(), Escaper.SHELL_ESCAPER));
     }
 
@@ -396,13 +397,13 @@ public class CxxGenruleDescription
     }
 
     @Override
-    public Object extractRuleKeyAppendables(
+    public Object extractRuleKeyAppendablesFrom(
         final BuildTarget target,
         final CellPathResolver cellNames,
         final BuildRuleResolver resolver,
-        final ImmutableList<String> input) throws MacroException {
+        final ImmutableList<BuildTarget> input) throws MacroException {
       final Iterable<CxxPreprocessorInput> transitivePreprocessorInput =
-          getCxxPreprocessorInput(resolve(target, cellNames, resolver, input));
+          getCxxPreprocessorInput(resolve(resolver, input));
       final PreprocessorFlags ppFlags = getPreprocessorFlags(transitivePreprocessorInput);
       return new RuleKeyAppendable() {
         @Override
@@ -520,12 +521,10 @@ public class CxxGenruleDescription
      */
     @Override
     protected ImmutableList<BuildRule> resolve(
-        BuildTarget target,
-        CellPathResolver cellNames,
         BuildRuleResolver resolver,
-        ImmutableList<String> input)
+        ImmutableList<BuildTarget> input)
         throws MacroException {
-      return FluentIterable.from(super.resolve(target, cellNames, resolver, input))
+      return FluentIterable.from(super.resolve(resolver, input))
           .filter(Predicates.instanceOf(NativeLinkable.class))
           .toList();
     }
@@ -576,12 +575,12 @@ public class CxxGenruleDescription
     }
 
     @Override
-    public Object extractRuleKeyAppendables(
+    public Object extractRuleKeyAppendablesFrom(
         final BuildTarget target,
         final CellPathResolver cellNames,
         final BuildRuleResolver resolver,
-        final ImmutableList<String> input) throws MacroException {
-      return getLinkerArgs(resolver, resolve(target, cellNames, resolver, input));
+        final ImmutableList<BuildTarget> input) throws MacroException {
+      return getLinkerArgs(resolver, resolve(resolver, input));
     }
 
   }

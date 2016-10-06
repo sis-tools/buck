@@ -26,4 +26,13 @@ public interface Compiler extends Tool {
 
   Optional<ImmutableList<String>> getFlagsForColorDiagnostics();
 
+  ImmutableList<String> languageArgs(String language);
+
+  boolean isArgFileSupported();
+
+  boolean isDependencyFileSupported();
+
+  ImmutableList<String> outputArgs(String outputPath);
+
+  ImmutableList<String> outputDependenciesArgs(String outputPath);
 }
